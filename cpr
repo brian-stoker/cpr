@@ -1,0 +1,32 @@
+#!/bin/bash
+
+SRC="$1"
+DEST="$2"
+
+if [[ -z "$SRC" || -z "$DEST" ]]; then
+  echo "Usage: cpr <source> <destination>"
+  exit 1
+fi
+
+# Get absolute paths for SRC and DEST
+SRC_ABS=$(cd "$SRC" && pwd)
+DEST_ABS=$(mkdir -p "$DEST" && cd "$DEST" && pwd)
+
+# Ensure source is a git repo
+if [[ ! -d "$SRC_ABS/.git" ]]; then
+  echo "Error: $SRC_ABS is not a git repository"
+  exit 1
+fi
+
+# Use git to list tracked + untracked (not ignored) files
+cd "$SRC_ABS" || exit 1
+git ls-files --cached --others --exclude-standard | while IFS= read -r file; do
+  src_path="$SRC_ABS/$file"
+  if [[ -f "$src_path" ]]; then
+    dest_path="$DEST_ABS/$file"
+    mkdir -p "$(dirname "$dest_path")"
+    cp -p "$src_path" "$dest_path"
+  fi
+done
+
+echo "Copied from $SRC_ABS to $DEST_ABS, respecting .gitignore rules."
