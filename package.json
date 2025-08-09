@@ -1,0 +1,37 @@
+{
+  "name": "cpr-cli",
+  "version": "1.0.0",
+  "description": "A fast git-aware copy tool that respects .gitignore rules",
+  "main": "cpr",
+  "bin": {
+    "cpr": "./cpr"
+  },
+  "scripts": {
+    "install": "node install.js",
+    "postinstall": "node install.js"
+  },
+  "keywords": [
+    "copy",
+    "git",
+    "gitignore",
+    "cli",
+    "command-line",
+    "file-copy",
+    "parallel"
+  ],
+  "author": "Brian Stoker <b@stokedconsulting.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/brian-stoker/cpr.git"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "preferGlobal": true,
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ]
+}
