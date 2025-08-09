@@ -1,6 +1,6 @@
 {
   "name": "copy-repo-cli",
-  "version": "0.0.0-a.1",
+  "version": "0.0.0-a.2",
   "description": "A fast git-aware copy tool that respects .gitignore rules",
   "main": "cpr",
   "bin": {
@@ -23,7 +23,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/brian-stoker/cpr.git"
+    "url": "https://github.com/brian-stoker/copy-repo-cli.git"
   },
   "engines": {
     "node": ">=14.0.0"
