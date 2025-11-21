@@ -2,10 +2,21 @@
 
 # Parse flags
 INCLUDE_GIT=true
+FORCE=false
+CLEAN=false
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --no-git)
       INCLUDE_GIT=false
+      shift
+      ;;
+    --force)
+      FORCE=true
+      shift
+      ;;
+    --clean)
+      CLEAN=true
       shift
       ;;
     *)
@@ -18,13 +29,142 @@ SRC="$1"
 DEST="$2"
 
 if [[ -z "$SRC" || -z "$DEST" ]]; then
-  echo "Usage: cpr [--no-git] <source> <destination>"
+  echo "Usage: cpr [--no-git] [--force] [--clean] <source> <destination>"
   echo "  --no-git: Exclude .git directory from copy (default: includes .git)"
+  echo "  --force:  Overwrite destination without prompting"
+  echo "  --clean:  Remove destination directory before copying"
   exit 1
 fi
 
 SRC=$(cd "$SRC" && pwd)
 DEST=$(mkdir -p "$DEST" && cd "$DEST" && pwd)
+
+# Smart destination handling
+check_destination_state() {
+  if [[ ! -d "$DEST" ]] || [[ -z "$(ls -A "$DEST" 2>/dev/null)" ]]; then
+    # Destination is empty or doesn't exist
+    echo "empty"
+    return
+  fi
+
+  # Check if destination is a git repo
+  if ! git -C "$DEST" rev-parse --git-dir &>/dev/null; then
+    # Not a git repo, has files
+    echo "non-git"
+    return
+  fi
+
+  # Check for untracked files
+  local untracked=$(git -C "$DEST" ls-files --others --exclude-standard)
+
+  # Check for uncommitted changes
+  local uncommitted=$(git -C "$DEST" status --porcelain)
+
+  # Check for unpushed commits (if there's a remote)
+  local unpushed=""
+  if git -C "$DEST" rev-parse @{u} &>/dev/null; then
+    unpushed=$(git -C "$DEST" log @{u}.. --oneline 2>/dev/null)
+  fi
+
+  if [[ -n "$untracked" ]] || [[ -n "$uncommitted" ]] || [[ -n "$unpushed" ]]; then
+    echo "dirty"
+  else
+    echo "clean"
+  fi
+}
+
+handle_destination() {
+  local state=$(check_destination_state)
+
+  # --clean flag always removes destination
+  if [[ "$CLEAN" == "true" ]]; then
+    echo "Removing destination directory..."
+    rm -rf "$DEST"
+    mkdir -p "$DEST"
+    return 0
+  fi
+
+  # --force flag skips all checks
+  if [[ "$FORCE" == "true" ]]; then
+    return 0
+  fi
+
+  case "$state" in
+    empty)
+      # Nothing to do
+      return 0
+      ;;
+    clean)
+      # Clean git repo - auto remove and recreate
+      echo "Destination is a clean git repo (all changes pushed). Removing and recreating..."
+      rm -rf "$DEST"
+      mkdir -p "$DEST"
+      return 0
+      ;;
+    dirty)
+      # Dirty git repo - prompt user
+      echo ""
+      echo "⚠️  Destination has uncommitted or unpushed changes:"
+
+      local untracked=$(git -C "$DEST" ls-files --others --exclude-standard)
+      local uncommitted=$(git -C "$DEST" status --porcelain)
+      local unpushed=""
+      if git -C "$DEST" rev-parse @{u} &>/dev/null; then
+        unpushed=$(git -C "$DEST" log @{u}.. --oneline 2>/dev/null)
+      fi
+
+      [[ -n "$untracked" ]] && echo "  - Untracked files present"
+      [[ -n "$uncommitted" ]] && echo "  - Uncommitted changes present"
+      [[ -n "$unpushed" ]] && echo "  - Unpushed commits present"
+
+      echo ""
+      echo "Choose an action:"
+      echo "  1) Cancel - Stop without making changes"
+      echo "  2) Clean  - Remove destination and copy fresh (DESTRUCTIVE)"
+      echo "  3) Overwrite - Keep destination, overwrite matching files"
+      echo ""
+      read -p "Enter choice (1/2/3): " -n 1 -r choice
+      echo ""
+
+      case "$choice" in
+        1)
+          echo "Cancelled."
+          exit 0
+          ;;
+        2)
+          echo "Removing destination directory..."
+          rm -rf "$DEST"
+          mkdir -p "$DEST"
+          return 0
+          ;;
+        3)
+          echo "Proceeding with overwrite..."
+          return 0
+          ;;
+        *)
+          echo "Invalid choice. Cancelled."
+          exit 1
+          ;;
+      esac
+      ;;
+    non-git)
+      # Non-git directory with files - prompt
+      echo ""
+      echo "⚠️  Destination is not a git repo but contains files"
+      echo ""
+      read -p "Overwrite files in destination? (y/N): " -n 1 -r
+      echo ""
+      if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Cancelled."
+        exit 0
+      fi
+      return 0
+      ;;
+  esac
+}
+
+# Handle destination before copying
+handle_destination
 
 cd "$SRC" || exit 1
 
