@@ -1,6 +1,6 @@
 {
   "name": "copy-repo-cli",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A fast git-aware copy tool that respects .gitignore rules",
   "main": "cpr",
   "bin": {
