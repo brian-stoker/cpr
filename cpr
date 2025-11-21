@@ -32,11 +32,33 @@ cd "$SRC" || exit 1
 git ls-files --cached --others --exclude-standard -z | \
     xargs -0 -P 8 -I{} bash -c 'file="$1"; dest="$2"; if [[ -f "$file" ]]; then mkdir -p "$dest/$(dirname "$file")"; cp -p "$file" "$dest/$file"; fi' _ {} "$DEST"
 
-# Copy .git directory if not excluded
-if [[ "$INCLUDE_GIT" == "true" && -d ".git" ]]; then
-  cp -rp .git "$DEST/.git"
-  echo "Copied from $SRC to $DEST (including .git) using parallel mode, respecting .gitignore rules."
+# Handle .git directory/file if not excluded
+if [[ "$INCLUDE_GIT" == "true" ]]; then
+  if [[ -f ".git" ]]; then
+    # This is a worktree - .git is a file pointing to the main repo
+    GITDIR_LINE=$(cat .git)
+    # Extract the path from "gitdir: /path/to/main/.git/worktrees/name"
+    WORKTREE_GITDIR="${GITDIR_LINE#gitdir: }"
+
+    # Navigate up to find the main .git directory
+    # From /path/to/main/.git/worktrees/name -> /path/to/main/.git
+    MAIN_GITDIR=$(dirname $(dirname "$WORKTREE_GITDIR"))
+
+    if [[ -d "$MAIN_GITDIR" ]]; then
+      # Copy the main .git directory
+      cp -rp "$MAIN_GITDIR" "$DEST/.git"
+      echo "Copied from $SRC to $DEST (including .git from worktree root: $MAIN_GITDIR) using parallel mode, respecting .gitignore rules."
+    else
+      echo "Warning: Could not find main .git directory at $MAIN_GITDIR"
+      echo "Copied from $SRC to $DEST (excluding .git - main repo not found) using parallel mode, respecting .gitignore rules."
+    fi
+  elif [[ -d ".git" ]]; then
+    # Regular repository - .git is a directory
+    cp -rp .git "$DEST/.git"
+    echo "Copied from $SRC to $DEST (including .git) using parallel mode, respecting .gitignore rules."
+  else
+    echo "Copied from $SRC to $DEST (no .git found) using parallel mode, respecting .gitignore rules."
+  fi
 else
   echo "Copied from $SRC to $DEST (excluding .git) using parallel mode, respecting .gitignore rules."
 fi
-
