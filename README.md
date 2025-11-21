@@ -1,171 +1,230 @@
-# `cpr` – Git-Aware Copy Script
+# cpr – Git-Aware Copy Script
 
 ## Overview
-`cpr` is a Bash utility for copying the contents of a Git repository **while respecting `.gitignore` rules**.  
-It ensures that only files that are tracked by Git or explicitly untracked but **not ignored** are copied.  
 
-It is designed to be a safe, minimal replacement for `cp` or `rsync` in workflows where you want a **clean copy** of your working tree without build artifacts, temporary files, or other ignored files.
-
----
+`cpr` is a Bash utility for copying Git repositories while respecting `.gitignore` rules. It copies only files tracked by Git or explicitly untracked but not ignored, making it ideal for creating clean copies of working trees without build artifacts or temporary files.
 
 ## Features
-- **Respects `.gitignore`** files at all levels of the repository.
-- Copies:
-  - Files tracked by Git (`git ls-files --cached`)
-  - Untracked files not ignored (`git ls-files --others --exclude-standard`)
-  - **The `.git` directory by default** (new: preserves full Git history)
-- **Skips**:
-  - Any files matching `.gitignore` rules
-  - Missing files (no error spam)
-  - The `.git` directory only when `--no-git` flag is used
-- Preserves:
-  - File timestamps
-  - File permissions
-  - Directory structure
-  - Git repository state (by default)
 
----
+**Git Integration**
+- Respects `.gitignore` files at all levels
+- Preserves `.git` directory by default (full repository history)
+- Supports Git worktrees (automatically finds and copies main repository)
+- Handles nested repositories correctly
 
-## Requirements
-- **macOS/Linux**: `bash` (v4+ recommended)
-- **Windows**: Git Bash or WSL (Windows Subsystem for Linux)
-- Git installed and available in `PATH`
-- Node.js (v14+) for npm installation method
-- The source directory must be **inside a Git repository**
+**Smart Destination Handling**
+- Auto-removes clean destinations (all changes committed and pushed)
+- Interactive prompts for destinations with uncommitted or unpushed changes
+- Configurable behavior via `--force` and `--clean` flags
 
----
+**File Handling**
+- Copies tracked files and untracked non-ignored files
+- Preserves timestamps, permissions, and directory structure
+- Parallel file operations for improved performance
+- Skips files matching `.gitignore` patterns
 
 ## Installation
 
-### Option 1: Install from npm (Recommended)
-
-Once published to npm, you can install globally:
+### Via npm (Recommended)
 
 ```bash
 npm install -g cpr-cli
 ```
 
-### Option 2: Install from Source
+### From Source
 
-#### macOS / Linux
-
+**macOS / Linux:**
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/cpr.git
+git clone https://github.com/brian-stoker/cpr.git
 cd cpr
-
-# Option A: Using npm (handles permissions automatically)
-sudo npm run install
-
-# Option B: Manual installation
 sudo cp cpr /usr/local/bin/cpr
-sudo chmod 755 /usr/local/bin/cpr
+sudo chmod +x /usr/local/bin/cpr
 ```
 
-#### Windows
-
-**Prerequisites**: Install [Git for Windows](https://git-scm.com/download/win) which includes Git Bash.
-
+**Windows (Git Bash):**
 ```bash
-# Using Git Bash or PowerShell as Administrator
-git clone https://github.com/yourusername/cpr.git
+git clone https://github.com/brian-stoker/cpr.git
 cd cpr
-
-# Install using npm
-npm run install
-```
-
-For Windows, the installer will:
-- Copy the script to npm's global bin directory
-- Create a `.cmd` wrapper for command prompt compatibility
-- Require Git Bash to be installed for the bash script to run
-
-#### Alternative: Direct Download
-
-```bash
-# macOS/Linux
-curl -o /tmp/cpr https://raw.githubusercontent.com/yourusername/cpr/main/cpr
-sudo mv /tmp/cpr /usr/local/bin/cpr
-sudo chmod 755 /usr/local/bin/cpr
-
-# Windows (Git Bash)
-curl -o cpr https://raw.githubusercontent.com/yourusername/cpr/main/cpr
 npm run install
 ```
 
 ### Verify Installation
 
-After installation, verify it works:
-
 ```bash
 cpr --help
 ```
 
----
-
 ## Usage
+
 ```bash
-cpr [--no-git] <source> <destination>
+cpr [--no-git] [--force] [--clean] <source> <destination>
 ```
 
-### Options:
-- `--no-git`: Exclude the `.git` directory from the copy (reverts to previous behavior)
+### Options
 
-### Examples:
-Copy a repo with full Git history (default):
+**`--no-git`**
+Exclude the `.git` directory from copy (files only, no repository data)
+
+**`--force`**
+Skip all safety checks and prompts. Overwrites destination without confirmation.
+
+**`--clean`**
+Remove destination directory before copying, ensuring a fresh start.
+
+## Examples
+
+### Basic Usage
+
+Copy repository with full Git history:
 ```bash
-cpr ~/dev/my-project ~/tmp/my-project-clean
+cpr ~/dev/my-project ~/backup/my-project
 ```
 
-Copy a repo without Git history:
+Copy files only (no Git data):
 ```bash
-cpr --no-git ~/dev/my-project ~/tmp/my-project-clean
+cpr --no-git ~/dev/my-project ~/deploy/my-project
 ```
 
----
+### Git Worktree Support
 
-## What It **DOES**
-- Creates an exact copy of your Git working directory **minus ignored files**.
-- **Includes the `.git` directory by default**, making the destination a full Git repository.
-- Handles nested `.gitignore` rules automatically.
-- Copies both tracked and untracked-but-not-ignored files.
-- Preserves directory structure exactly.
-- Works with repositories on any branch or commit state.
-- Parallelized High-Performance Version
+When copying from a worktree, `cpr` automatically finds and copies the main repository's `.git` directory:
 
----
+```bash
+# Create a worktree
+cd ~/dev/my-project
+git worktree add ../feature-branch feature
 
-## What It **DOES NOT** Do
-- ❌ Does **not** copy `.git` metadata when `--no-git` flag is used.
-- ❌ Does **not** include files excluded by `.gitignore`, `.git/info/exclude`, or global Git ignore settings.
-- ❌ Does **not** perform differential sync — it always copies all matching files fresh.
-- ❌ Does **not** copy outside of the Git repository’s root.
+# Copy the worktree (includes main repo's .git)
+cpr ../feature-branch ~/backup/feature-branch
+```
 
----
+The destination will be a complete repository, not a worktree reference.
 
-## Internals
-The script:
-1. Parses command-line flags (e.g., `--no-git`).
-2. Resolves absolute paths for both source and destination.
-3. Checks that the source is a Git repository.
-3. Uses:
-   ```bash
-   git ls-files --cached --others --exclude-standard
-   ```
-   to get a clean file list.
-4. Loops through each file, creating directories as needed.
-5. Copies files with:
-   ```bash
-   cp -p
-   ```
-   to preserve timestamps and permissions.
-6. Copies the `.git` directory with `cp -rp` (unless `--no-git` is specified).
+### Destination Handling
 
----
+**Empty destination** - No prompts, just copies:
+```bash
+cpr ~/dev/project ~/new-location
+```
+
+**Clean destination** (all changes pushed) - Auto-removes and copies:
+```bash
+cpr ~/dev/project ~/existing-clean-repo
+# Output: "Destination is a clean git repo (all changes pushed). Removing and recreating..."
+```
+
+**Dirty destination** (uncommitted/unpushed changes) - Interactive prompt:
+```bash
+cpr ~/dev/project ~/existing-dirty-repo
+# Output:
+# ⚠️  Destination has uncommitted or unpushed changes:
+#   - Untracked files present
+#   - Uncommitted changes present
+#   - Unpushed commits present
+#
+# Choose an action:
+#   1) Cancel - Stop without making changes
+#   2) Clean  - Remove destination and copy fresh (DESTRUCTIVE)
+#   3) Overwrite - Keep destination, overwrite matching files
+#
+# Enter choice (1/2/3):
+```
+
+**Non-git destination** with files - Confirmation prompt:
+```bash
+cpr ~/dev/project ~/some-folder-with-files
+# Output:
+# ⚠️  Destination is not a git repo but contains files
+#
+# Overwrite files in destination? (y/N):
+```
+
+### Force and Clean Flags
+
+Skip all prompts and overwrite:
+```bash
+cpr --force ~/dev/project ~/existing-repo
+```
+
+Always start fresh (removes destination first):
+```bash
+cpr --clean ~/dev/project ~/existing-repo
+```
+
+Combine flags:
+```bash
+cpr --clean --no-git ~/dev/project ~/deploy
+```
+
+## Behavior Details
+
+### What Gets Copied
+
+**Included by default:**
+- All tracked files (`git ls-files --cached`)
+- Untracked files not matching `.gitignore` (`git ls-files --others --exclude-standard`)
+- The `.git` directory (full repository, including history, branches, tags)
+- For worktrees: The main repository's `.git` directory (not the worktree reference file)
+
+**Excluded:**
+- Files matching `.gitignore` patterns
+- Files outside the repository root
+- The `.git` directory if `--no-git` flag is used
+
+### Destination States
+
+**Empty:**
+No files present. Copies without prompts.
+
+**Clean Git Repository:**
+Git repository with no untracked files, no uncommitted changes, and no unpushed commits. Automatically removed and recreated.
+
+**Dirty Git Repository:**
+Git repository with untracked files, uncommitted changes, or unpushed commits. Prompts user for action (cancel/clean/overwrite).
+
+**Non-Git Directory:**
+Directory containing files but no Git repository. Prompts for confirmation before overwriting.
+
+**Force Mode (`--force`):**
+Skips all checks and prompts. Overwrites matching files without confirmation.
+
+**Clean Mode (`--clean`):**
+Always removes destination directory before copying, regardless of state.
+
+## Requirements
+
+- Bash (v4+ recommended)
+- Git installed and in PATH
+- Source directory must be inside a Git repository
+- For Windows: Git Bash or WSL
+
+## How It Works
+
+1. Parse command-line flags
+2. Resolve absolute paths for source and destination
+3. Check destination state (empty/clean/dirty/non-git)
+4. Handle destination according to state and flags
+5. Use `git ls-files --cached --others --exclude-standard` to get file list
+6. Copy files in parallel (8 concurrent operations) with `cp -p` to preserve metadata
+7. Handle `.git` directory:
+   - If source is a worktree: Find and copy main repository's `.git` directory
+   - If source is regular repo: Copy `.git` directory
+   - If `--no-git`: Skip `.git` entirely
 
 ## Troubleshooting
-- **`Error: <path> is not a git repository`**  
-  Ensure you point the source to the **root of a Git repo** or any folder inside it.
 
-- **Files you expected aren’t copied**  
-  Check your `.gitignore` — if Git ignores them, `cpr` will too.
+**"Error: Not a git repository"**
+Source must be inside a Git repository. Navigate to repository root or any subdirectory.
+
+**"Expected files not copied"**
+Check `.gitignore` - ignored files are intentionally skipped.
+
+**"Warning: Could not find main .git directory"**
+Worktree detection found a `.git` file but couldn't locate main repository. Verify worktree setup with `git worktree list`.
+
+**"Destination has uncommitted changes" prompt appears unexpectedly**
+Destination is a Git repository with uncommitted work. Use `--force` to skip prompt or commit/push changes first.
+
+## License
+
+MIT
