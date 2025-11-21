@@ -152,13 +152,34 @@ handle_destination() {
       echo ""
       echo "⚠️  Destination is not a git repo but contains files"
       echo ""
-      read -p "Overwrite files in destination? (y/N): " -n 1 -r
+      echo "Choose an action:"
+      echo "  1) Cancel - Stop without making changes"
+      echo "  2) Clean  - Remove destination and copy fresh (DESTRUCTIVE)"
+      echo "  3) Overwrite - Keep destination, overwrite matching files"
       echo ""
-      if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "Cancelled."
-        exit 0
-      fi
-      return 0
+      read -p "Enter choice (1/2/3): " -n 1 -r choice
+      echo ""
+
+      case "$choice" in
+        1)
+          echo "Cancelled."
+          exit 0
+          ;;
+        2)
+          echo "Removing destination directory..."
+          rm -rf "$DEST"
+          mkdir -p "$DEST"
+          return 0
+          ;;
+        3)
+          echo "Proceeding with overwrite..."
+          return 0
+          ;;
+        *)
+          echo "Invalid choice. Cancelled."
+          exit 1
+          ;;
+      esac
       ;;
   esac
 }
